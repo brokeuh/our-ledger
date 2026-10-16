@@ -169,7 +169,7 @@ header h1{font-size:1.5rem; font-weight:600;}
 .tile.expense .value{color:var(--expense);}
 .tile.save .value{color:var(--accent);}
 .tile .sub{font-size:0.72rem; color:var(--ink-soft); margin-top:2px;}
-.tile .label .edit-icon{background:none; border:none; color:var(--ink-soft); cursor:pointer; font-size:0.85rem; padding:0 0 0 4px; line-height:1; vertical-align:middle;}
+.tile .label .edit-icon{background:none; border:none; color:var(--accent); text-decoration:underline; text-transform:none; letter-spacing:0; font-weight:700; cursor:pointer; font-size:0.72rem; padding:2px 0 2px 6px; line-height:1; vertical-align:middle;}
 .tile .label .edit-icon:hover{color:var(--ink);}
 
 .trend{padding:4px 0 18px;}
@@ -458,7 +458,7 @@ input:focus-visible, select:focus-visible, button:focus-visible{outline:2px soli
       <div class="value" id="totalExpense">€0</div>
     </div>
     <div class="tile save">
-      <div class="label">Saved<button type="button" class="edit-icon" id="editSavingsBtn" aria-label="Edit starting balance">✎</button></div>
+      <div class="label">Saved<button type="button" class="edit-icon" id="editSavingsBtn">Edit</button></div>
       <div class="value" id="totalSave">€0</div>
       <div class="sub" id="savePct">0% of income</div>
       <div class="sub" id="savingsTotal">Total: €0</div>
