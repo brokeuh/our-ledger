@@ -1,10 +1,12 @@
 // Minimal app-shell cache so the app installs properly and opens offline
 // (though it needs a network connection to actually sync data with Firestore).
-var CACHE_NAME = "our-ledger-v1";
+var CACHE_NAME = "our-ledger-v2";
 var SHELL_FILES = [
   "./",
   "./index.html",
+  "./solo.html",
   "./manifest.json",
+  "./solo-manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-512-maskable.png"
@@ -42,7 +44,7 @@ self.addEventListener("fetch", function(event){
         caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copy); });
         return resp;
       }).catch(function(){
-        return caches.match("./index.html");
+        return caches.match(url.pathname.indexOf("solo") !== -1 ? "./solo.html" : "./index.html");
       });
     })
   );

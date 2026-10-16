@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Our Ledger (Solo)</title>
+<link rel="manifest" href="solo-manifest.json">
+<meta name="theme-color" content="#2f6b4f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Our Ledger (Solo)">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+/* Layout: sticky monthly summary, a trend chart, per-person paycheck cards computed from the calendar, then fixed/limited recurring bills and one-off entries, all behind slide-up forms */
+:root{
+  --bg:#f6f4ef;
+  --surface:#ffffff;
+  --ink:#1f2a24;
+  --ink-soft:#5c6a62;
+  --line:#e2ddd1;
+  --income:#2f6b4f;
+  --income-soft:#e4efe8;
+  --expense:#9c4a3a;
+  --expense-soft:#f5e6e1;
+  --accent:#2f6b4f;
+  --accent-ink:#ffffff;
+  --badge-bg:#ece7d9;
+  --sick:#b5894a;
+  --sick-soft:#f3e8d6;
+  --vac:#4a7ab5;
+  --vac-soft:#dfe9f6;
+  --adv:#7a5ab5;
+  --adv-soft:#ece4f6;
+  --unpaid:#9c4a4a;
+  --unpaid-soft:#f5e1e1;
+  --special:#2f7a8a;
+  --special-soft:#dcedf0;
+  --home:#5a8a3a;
+  --home-soft:#e6efdc;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151815;
+    --surface:#1d211d;
+    --ink:#eeeee6;
+    --ink-soft:#9aa39b;
+    --line:#2d322c;
+    --income:#6fbf94;
+    --income-soft:#1f2b22;
+    --expense:#e08a74;
+    --expense-soft:#2d211d;
+    --accent:#6fbf94;
+    --accent-ink:#0f1a13;
+    --badge-bg:#282d26;
+    --sick:#d9ab66;
+    --sick-soft:#2e2619;
+    --vac:#7fa8de;
+    --vac-soft:#1c2733;
+    --adv:#b79be0;
+    --adv-soft:#2a2333;
+    --unpaid:#e08a8a;
+    --unpaid-soft:#2e1f1f;
+    --special:#6fc4d6;
+    --special-soft:#1c2c2f;
+    --home:#9bcf7a;
+    --home-soft:#22301c;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151815;
+  --surface:#1d211d;
+  --ink:#eeeee6;
+  --ink-soft:#9aa39b;
+  --line:#2d322c;
+  --income:#6fbf94;
+  --income-soft:#1f2b22;
+  --expense:#e08a74;
+  --expense-soft:#2d211d;
+  --accent:#6fbf94;
+  --accent-ink:#0f1a13;
+  --badge-bg:#282d26;
+  --sick:#d9ab66;
+  --sick-soft:#2e2619;
+  --vac:#7fa8de;
+  --vac-soft:#1c2733;
+  --adv:#b79be0;
+  --adv-soft:#2a2333;
+  --unpaid:#e08a8a;
+  --unpaid-soft:#2e1f1f;
+  --special:#6fc4d6;
+  --special-soft:#1c2c2f;
+  --home:#9bcf7a;
+  --home-soft:#22301c;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;
+  flex-direction:column;
+  min-height:100%;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0 0 auto;
+  height:env(safe-area-inset-top, 0px);
+  z-index:10;
+  background:var(--bg);
+}
+
+h1,h2,h3{font-family:'Fraunces',Georgia,serif; text-wrap:balance; margin:0;}
+
+.wrap{max-width:640px; margin:0 auto; width:100%; display:flex; flex-direction:column; flex:1; min-width:0;}
+
+header{
+  position:sticky;
+  top:env(safe-area-inset-top, 0px);
+  z-index:9;
+  background:var(--bg);
+  padding-top:20px;
+  padding-bottom:14px;
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  border-bottom:1px solid var(--line);
+}
+header .title-row{display:flex; align-items:baseline; gap:8px;}
+header h1{font-size:1.5rem; font-weight:600;}
+.backup-link{
+  background:none; border:none; color:var(--ink-soft); cursor:pointer;
+  font-size:0.78rem; font-weight:600; text-decoration:underline; padding:0;
+}
+.month-nav{display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--ink-soft);}
+.month-nav button{
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--ink);
+  border-radius:8px;
+  width:30px; height:30px;
+  font-size:1rem;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.month-nav button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+.month-label{font-weight:600; color:var(--ink); min-width:9ch; text-align:center;}
+
+.summary{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:10px;
+  padding:16px 0;
+}
+.tile{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px 14px;
+  min-width:0;
+}
+.tile .label{font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft);}
+.tile .value{font-family:'Fraunces',Georgia,serif; font-size:1.3rem; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tile.income .value{color:var(--income);}
+.tile.expense .value{color:var(--expense);}
+.tile.save .value{color:var(--accent);}
+.tile .sub{font-size:0.72rem; color:var(--ink-soft); margin-top:2px;}
+
+.trend{padding:4px 0 18px;}
+.trend .label{font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:8px;}
+.trend svg{display:block; width:100%; height:auto; overflow:visible;}
+
+.list{flex:1; padding-bottom:100px; min-width:0;}
+
+.section-title{
+  font-size:0.74rem;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:var(--ink-soft);
+  font-weight:700;
+  margin:20px 0 8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.section-title:first-child{margin-top:4px;}
+.section-title .add-link{
+  text-transform:none;
+  letter-spacing:0;
+  font-weight:600;
+  font-size:0.78rem;
+  color:var(--accent);
+  background:none;
+  border:none;
+  cursor:pointer;
+  padding:2px 0;
+}
+
+.hint-box{
+  border:1px dashed var(--line);
+  border-radius:12px;
+  padding:14px;
+  font-size:0.85rem;
+  color:var(--ink-soft);
+  margin-bottom:8px;
+  line-height:1.4;
+}
+
+/* person cards */
+.person-card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:14px 16px;
+  margin-bottom:12px;
+  min-width:0;
+}
+.person-head{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.person-name{font-weight:700; font-size:1rem;}
+.person-actions{display:flex; gap:2px; flex:none;}
+.person-actions button{
+  background:none; border:none; color:var(--ink-soft); cursor:pointer;
+  font-size:1rem; padding:4px 6px; line-height:1;
+}
+.person-actions button:hover{color:var(--ink);}
+.person-actions button.danger:hover{color:var(--expense);}
+.person-total{
+  font-family:'Fraunces',Georgia,serif;
+  font-size:1.6rem; font-weight:600; color:var(--income);
+  font-variant-numeric:tabular-nums;
+  margin-top:6px;
+}
+.person-total .unit{font-size:0.78rem; font-family:inherit; color:var(--ink-soft); font-weight:600; margin-left:4px;}
+.person-sub{font-size:0.78rem; color:var(--ink-soft); margin-top:1px;}
+.person-breakdown{
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:6px 14px;
+  margin-top:12px;
+  font-size:0.84rem;
+}
+.person-breakdown div{display:flex; justify-content:space-between; gap:8px; color:var(--ink-soft); min-width:0;}
+.person-breakdown div span{color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums;}
+.person-pattern{font-size:0.76rem; color:var(--ink-soft); margin-top:10px; padding-top:10px; border-top:1px solid var(--line);}
+.dayoff-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+.dayoff-chip{
+  display:flex; align-items:center; gap:5px;
+  font-size:0.76rem;
+  padding:4px 5px 4px 10px;
+  border-radius:20px;
+  background:var(--badge-bg);
+  color:var(--ink-soft);
+}
+.dayoff-chip.sick{background:var(--sick-soft); color:var(--sick);}
+.dayoff-chip.vacation{background:var(--vac-soft); color:var(--vac);}
+.dayoff-chip.adv{background:var(--adv-soft); color:var(--adv);}
+.dayoff-chip.unpaid{background:var(--unpaid-soft); color:var(--unpaid);}
+.dayoff-chip.special{background:var(--special-soft); color:var(--special);}
+.dayoff-chip.home{background:var(--home-soft); color:var(--home);}
+.dayoff-chip button{
+  background:none; border:none; cursor:pointer; color:inherit; font-size:0.9rem; padding:0 2px; line-height:1;
+}
+.mark-dayoff-btn{
+  margin-top:10px;
+  background:none;
+  border:1px dashed var(--line);
+  color:var(--ink-soft);
+  border-radius:8px;
+  padding:7px 10px;
+  font-size:0.8rem;
+  cursor:pointer;
+  font-weight:600;
+}
+.mark-dayoff-btn:hover{color:var(--ink); border-color:var(--ink-soft);}
+
+.day-group{margin-bottom:18px;}
+.day-group .day-label{font-size:0.78rem; color:var(--ink-soft); margin-bottom:6px; font-weight:600;}
+
+.entry{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:11px 0;
+  border-bottom:1px solid var(--line);
+  min-width:0;
+}
+.entry .dot{width:8px; height:8px; border-radius:50%; flex:none;}
+.entry.income .dot{background:var(--income);}
+.entry.expense .dot{background:var(--expense);}
+.entry .info{flex:1; min-width:0;}
+.entry .cat{font-weight:600; font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.entry .note{font-size:0.82rem; color:var(--ink-soft); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.entry .badge{
+  font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.03em;
+  padding:2px 7px; border-radius:20px; background:var(--badge-bg); color:var(--ink-soft); white-space:nowrap;
+}
+.entry .amt{font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap; flex:none;}
+.entry.income .amt{color:var(--income);}
+.entry.expense .amt{color:var(--expense);}
+.entry .actions{display:flex; gap:0; flex:none;}
+.entry .actions button{
+  background:none; border:none; color:var(--ink-soft); cursor:pointer;
+  font-size:1.05rem; padding:4px 6px; line-height:1;
+}
+.entry .actions button:hover{color:var(--expense);}
+.entry .actions button.stop:hover{color:var(--accent);}
+
+.empty{text-align:center; color:var(--ink-soft); padding:40px 16px; font-size:0.9rem;}
+
+.fab{
+  position:fixed;
+  right:max(20px, calc(16px + env(safe-area-inset-right, 0px)));
+  bottom:max(20px, calc(16px + env(safe-area-inset-bottom, 0px)));
+  width:56px; height:56px;
+  border-radius:50%;
+  background:var(--accent);
+  color:var(--accent-ink);
+  border:none;
+  font-size:1.6rem;
+  box-shadow:0 6px 16px rgba(0,0,0,0.2);
+  cursor:pointer;
+  z-index:20;
+  display:flex; align-items:center; justify-content:center;
+}
+.fab:focus-visible{outline:2px solid var(--ink); outline-offset:2px;}
+
+.sheet-backdrop{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,0.35);
+  z-index:30;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+}
+.sheet{
+  background:var(--surface);
+  width:100%;
+  max-width:640px;
+  border-radius:18px 18px 0 0;
+  padding-top:20px;
+  padding-bottom:max(24px, calc(20px + env(safe-area-inset-bottom, 0px)));
+  padding-left:max(20px, env(safe-area-inset-left, 0px));
+  padding-right:max(20px, env(safe-area-inset-right, 0px));
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  max-height:88vh;
+  overflow-y:auto;
+}
+.sheet h2{font-size:1.2rem;}
+.toggle-row{display:flex; gap:8px;}
+.toggle-row.grid4{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.toggle-row button{
+  flex:1;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:var(--bg);
+  color:var(--ink-soft);
+  font-weight:600;
+  cursor:pointer;
+  font-size:0.92rem;
+}
+.toggle-row button.active.income{background:var(--income-soft); color:var(--income); border-color:var(--income);}
+.toggle-row button.active.expense{background:var(--expense-soft); color:var(--expense); border-color:var(--expense);}
+.toggle-row button.active[data-freq]{background:var(--income-soft); color:var(--accent); border-color:var(--accent);}
+.toggle-row button.active[data-off="sick"]{background:var(--sick-soft); color:var(--sick); border-color:var(--sick);}
+.toggle-row button.active[data-off="vacation"]{background:var(--vac-soft); color:var(--vac); border-color:var(--vac);}
+.toggle-row button.active[data-off="adv"]{background:var(--adv-soft); color:var(--adv); border-color:var(--adv);}
+.toggle-row button.active[data-off="unpaid"]{background:var(--unpaid-soft); color:var(--unpaid); border-color:var(--unpaid);}
+.toggle-row button.active[data-off="special"]{background:var(--special-soft); color:var(--special); border-color:var(--special);}
+.toggle-row button.active[data-off="home"]{background:var(--home-soft); color:var(--home); border-color:var(--home);}
+
+label{font-size:0.78rem; color:var(--ink-soft); font-weight:600; display:block; margin-bottom:4px;}
+input, select{
+  width:100%;
+  padding:11px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:var(--bg);
+  color:var(--ink);
+  font-size:1rem;
+  font-family:inherit;
+}
+input:focus-visible, select:focus-visible, button:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+.field{margin-bottom:0; min-width:0;}
+.row2{display:flex; gap:10px;}
+.row2 > div{flex:1; min-width:0;}
+.row3{display:flex; gap:8px;}
+.row3 > div{flex:1; min-width:0;}
+
+.sub-note{font-size:0.78rem; color:var(--ink-soft); margin-top:-4px;}
+
+.weekday-row{display:flex; gap:6px; flex-wrap:wrap;}
+.weekday-row button{
+  flex:1;
+  min-width:36px;
+  padding:9px 0;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--bg);
+  color:var(--ink-soft);
+  font-weight:600;
+  font-size:0.8rem;
+  cursor:pointer;
+}
+.weekday-row button.active{background:var(--income-soft); color:var(--accent); border-color:var(--accent);}
+
+.submit-row{display:flex; gap:10px; margin-top:4px;}
+.submit-row button{
+  flex:1;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  font-weight:600;
+  font-size:0.95rem;
+  cursor:pointer;
+}
+.btn-cancel{background:var(--bg); color:var(--ink-soft); border:1px solid var(--line) !important;}
+.btn-save{background:var(--accent); color:var(--accent-ink);}
+
+.status-line{font-size:0.78rem; color:var(--ink-soft); text-align:center; padding:8px 0 2px;}
+[hidden]{display:none!important;}
+
+@media (max-width:420px){
+  .summary{grid-template-columns:1fr 1fr;}
+  .tile.save{grid-column:1/-1;}
+  .person-breakdown{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="title-row">
+      <h1>Our Ledger</h1>
+      <button type="button" class="backup-link" id="openBackupBtn">Backup</button>
+    </div>
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Previous month">‹</button>
+      <span class="month-label" id="monthLabel">—</span>
+      <button id="nextMonth" aria-label="Next month">›</button>
+    </div>
+  </header>
+
+  <div class="summary">
+    <div class="tile income">
+      <div class="label">Income</div>
+      <div class="value" id="totalIncome">€0</div>
+    </div>
+    <div class="tile expense">
+      <div class="label">Expenses</div>
+      <div class="value" id="totalExpense">€0</div>
+    </div>
+    <div class="tile save">
+      <div class="label">Saved</div>
+      <div class="value" id="totalSave">€0</div>
+      <div class="sub" id="savePct">0% of income</div>
+    </div>
+  </div>
+
+  <div class="trend">
+    <div class="label">Last 6 months, saved per month</div>
+    <svg id="trendChart" viewBox="0 0 600 120" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="list" id="list">
+    <div id="peopleSection"></div>
+    <div id="ongoingSection"></div>
+    <div id="limitedSection"></div>
+    <div id="sporadicSection"></div>
+  </div>
+</div>
+
+<button class="fab" id="addBtn" aria-label="Add entry">+</button>
+
+<!-- Backup / restore sheet -->
+<div class="sheet-backdrop" id="backupBackdrop" hidden>
+  <div class="sheet">
+    <h2>Backup &amp; restore</h2>
+    <div class="sub-note">Your data lives only in this browser, on this device — nothing is sent anywhere. Download a backup file to keep it safe or move it to a new phone, and restore from one to load it back in. Restoring replaces everything currently in the app.</div>
+    <div class="submit-row">
+      <button type="button" class="btn-save" id="exportBtn">Download backup</button>
+    </div>
+    <div class="field">
+      <label for="importFile">Restore from a backup file</label>
+      <input type="file" id="importFile" accept="application/json">
+    </div>
+    <div class="submit-row">
+      <button type="button" class="btn-cancel" id="backupCloseBtn">Close</button>
+    </div>
+    <div class="status-line" id="backupStatus"></div>
+  </div>
+</div>
+
+<!-- Add/edit entry sheet -->
+<div class="sheet-backdrop" id="backdrop" hidden>
+  <form class="sheet" id="entryForm">
+    <h2>Add entry</h2>
+    <div class="toggle-row">
+      <button type="button" class="active income" id="typeIncomeBtn" data-type="income">Income</button>
+      <button type="button" id="typeExpenseBtn" data-type="expense">Expense</button>
+    </div>
+    <div class="toggle-row">
+      <button type="button" class="active" id="freqOnceBtn" data-freq="once">One-time</button>
+      <button type="button" id="freqRecurringBtn" data-freq="recurring">Recurring</button>
+    </div>
+
+    <div class="field">
+      <label for="amountInput">Amount (€)</label>
+      <input id="amountInput" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required>
+    </div>
+    <div class="field">
+      <label for="categoryInput">Category</label>
+      <select id="categoryInput"></select>
+    </div>
+
+    <div class="field" id="onceDateField">
+      <label for="dateInput">Date</label>
+      <input id="dateInput" type="date">
+    </div>
+
+    <div id="recurringOptions" hidden>
+      <div class="row2">
+        <div class="field">
+          <label for="startMonthInput">Starts</label>
+          <input id="startMonthInput" type="month">
+        </div>
+        <div class="field">
+          <label for="durationSelect">Duration</label>
+          <select id="durationSelect">
+            <option value="ongoing">Ongoing, every month</option>
+            <option value="limited">For a set number of months</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="monthsCountField" hidden>
+        <label for="monthsCountInput">Number of months</label>
+        <input id="monthsCountInput" type="number" min="1" max="120" step="1" placeholder="e.g. 6">
+      </div>
+      <div class="sub-note">It will be added to every month automatically, like rent or electricity, until you stop or remove it.</div>
+    </div>
+
+    <div class="field">
+      <label for="noteInput">Note (optional)</label>
+      <input id="noteInput" type="text" placeholder="e.g. groceries at Delhaize" maxlength="80">
+    </div>
+    <div class="submit-row">
+      <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
+      <button type="submit" class="btn-save">Save entry</button>
+    </div>
+    <div class="status-line" id="formStatus"></div>
+  </form>
+</div>
+
+<!-- Add/edit person sheet -->
+<div class="sheet-backdrop" id="personBackdrop" hidden>
+  <form class="sheet" id="personForm">
+    <h2 id="personSheetTitle">Add person</h2>
+    <div class="field">
+      <label for="personNameInput">Name</label>
+      <input id="personNameInput" type="text" placeholder="e.g. Alex" maxlength="40" required>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="personWageInput">Net hourly wage (€)</label>
+        <input id="personWageInput" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required>
+      </div>
+      <div class="field">
+        <label for="personHoursInput">Hours per work day</label>
+        <input id="personHoursInput" type="number" step="0.25" min="0" max="24" placeholder="8" required>
+      </div>
+    </div>
+    <div class="field">
+      <label>Work days</label>
+      <div class="weekday-row" id="weekdayRow">
+        <button type="button" data-day="1" class="active">Mon</button>
+        <button type="button" data-day="2" class="active">Tue</button>
+        <button type="button" data-day="3" class="active">Wed</button>
+        <button type="button" data-day="4" class="active">Thu</button>
+        <button type="button" data-day="5" class="active">Fri</button>
+        <button type="button" data-day="6">Sat</button>
+        <button type="button" data-day="0">Sun</button>
+      </div>
+    </div>
+    <div class="row3">
+      <div class="field">
+        <label for="personKmInput">Commute, km/day</label>
+        <input id="personKmInput" type="number" step="0.1" min="0" placeholder="0">
+      </div>
+      <div class="field">
+        <label for="personKmRateInput">Rate per km (€)</label>
+        <input id="personKmRateInput" type="number" step="0.001" min="0" placeholder="0.00">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="personFoodInput">Food voucher, per work day (€)</label>
+        <input id="personFoodInput" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label for="personInternetInput">Internet benefit, per month (€)</label>
+        <input id="personInternetInput" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label for="personSickPctInput">Sick day pay (% of wage)</label>
+      <input id="personSickPctInput" type="number" step="0.01" min="0" max="100" placeholder="100">
+    </div>
+    <div class="field">
+      <label for="personSpecialInput">Special leave pay, per day (€)</label>
+      <input id="personSpecialInput" type="number" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label for="personHomeInput">Home office allowance, per day (€, optional)</label>
+      <input id="personHomeInput" type="number" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="sub-note">Enter the net (take-home) hourly rate. Vacation and ADV days are paid in full by the employer; sick days use the % above. Special leave (e.g. parental leave via RVA) is paid by someone else at a flat daily rate instead of your wage. A home office day pays full wage and still earns food vouchers, just no travel allowance — add an allowance above if your employer pays one for working from home. Travel and food vouchers otherwise only count on days actually worked at the workplace.</div>
+    <div class="submit-row">
+      <button type="button" class="btn-cancel" id="personCancelBtn">Cancel</button>
+      <button type="submit" class="btn-save">Save person</button>
+    </div>
+    <div class="status-line" id="personFormStatus"></div>
+  </form>
+</div>
+
+<!-- Mark hours off sheet -->
+<div class="sheet-backdrop" id="hoursoffBackdrop" hidden>
+  <form class="sheet" id="hoursoffForm">
+    <h2>Mark hours off</h2>
+    <div class="row2">
+      <div class="field">
+        <label for="hoursoffDateInput">Date</label>
+        <input id="hoursoffDateInput" type="date" required>
+      </div>
+      <div class="field">
+        <label for="hoursoffHoursInput">Hours</label>
+        <input id="hoursoffHoursInput" type="number" step="0.25" min="0.25" max="24" placeholder="e.g. 3">
+      </div>
+    </div>
+    <div class="toggle-row">
+      <button type="button" class="active" id="hoursPaidBtn" data-paid="true">Paid</button>
+      <button type="button" id="hoursUnpaidBtn" data-paid="false">Unpaid</button>
+    </div>
+    <div class="sub-note">For a few hours off on an otherwise normal work day. Unpaid hours are deducted from wage at the hourly rate; commute and food vouchers aren't affected.</div>
+    <div class="submit-row">
+      <button type="button" class="btn-cancel" id="hoursoffCancelBtn">Cancel</button>
+      <button type="submit" class="btn-save">Mark hours</button>
+    </div>
+    <div class="status-line" id="hoursoffFormStatus"></div>
+  </form>
+</div>
+
+<!-- Mark day off sheet -->
+<div class="sheet-backdrop" id="dayoffBackdrop" hidden>
+  <form class="sheet" id="dayoffForm">
+    <h2>Mark a day off</h2>
+    <div class="toggle-row grid4">
+      <button type="button" class="active" id="offSickBtn" data-off="sick">Sick day</button>
+      <button type="button" id="offAdvBtn" data-off="adv">ADV day</button>
+      <button type="button" id="offVacationBtn" data-off="vacation">Vacation day</button>
+      <button type="button" id="offUnpaidBtn" data-off="unpaid">Unpaid day</button>
+      <button type="button" id="offSpecialBtn" data-off="special">Special leave</button>
+      <button type="button" id="offHomeBtn" data-off="home">Home office</button>
+    </div>
+    <div class="field">
+      <label for="dayoffDateInput">Date</label>
+      <input id="dayoffDateInput" type="date" required>
+    </div>
+    <div class="field">
+      <label for="dayoffRepeatInput">Repeat weekly, for how many weeks? (optional)</label>
+      <input id="dayoffRepeatInput" type="number" min="1" max="52" step="1" placeholder="just this once">
+    </div>
+    <div class="sub-note">Travel never counts on a day off. Food vouchers stop too, except on a home office day. Sick days use the % set on this person; ADV and vacation are paid in full; unpaid days are paid nothing; special leave (e.g. parental leave via RVA) pays the flat daily amount set on this person instead of wage; home office pays full wage, still earns food vouchers, and adds any home-office allowance you've set.</div>
+    <div class="submit-row">
+      <button type="button" class="btn-cancel" id="dayoffCancelBtn">Cancel</button>
+      <button type="submit" class="btn-save">Mark day</button>
+    </div>
+    <div class="status-line" id="dayoffFormStatus"></div>
+  </form>
+</div>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("service-worker.js").catch(function(){});
+  });
+}
+
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "our_ledger_solo_v1";
+
+  var INCOME_CATS = ["Salary","Freelance","Bonus","Gift","Refund","Other"];
+  var EXPENSE_CATS = ["Rent","Electricity","Water","Internet","Groceries","Transport","Insurance","Subscriptions","Dining out","Health","Shopping","Loan / installment","Other"];
+  var WEEKDAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  var state = {
+    entries: [], recurring: [], people: [], timeoff: [], hoursoff: [],
+    month: null
+  };
+
+  // ---- Local storage persistence ----
+  function loadFromStorage(){
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      state.entries = Array.isArray(data.entries) ? data.entries : [];
+      state.recurring = Array.isArray(data.recurring) ? data.recurring : [];
+      state.people = Array.isArray(data.people) ? data.people : [];
+      state.timeoff = Array.isArray(data.timeoff) ? data.timeoff : [];
+      state.hoursoff = Array.isArray(data.hoursoff) ? data.hoursoff : [];
+    } catch (e) {}
+  }
+  function persist(){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        entries: state.entries, recurring: state.recurring, people: state.people,
+        timeoff: state.timeoff, hoursoff: state.hoursoff
+      }));
+    } catch (e) {}
+  }
+
+  // ---- Date helpers ----
+  function currentMonthKey(d){ d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+  function todayISO(){ return toISODate(new Date()); }
+  function toISODate(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+  function addDays(dateStr, n){
+    var parts = dateStr.split("-").map(Number);
+    var d = new Date(parts[0], parts[1]-1, parts[2]);
+    d.setDate(d.getDate() + n);
+    return toISODate(d);
+  }
+  function monthLabel(key){
+    var parts = key.split("-").map(Number);
+    var d = new Date(parts[0], parts[1]-1, 1);
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+  function shiftMonth(key, delta){
+    var parts = key.split("-").map(Number);
+    var d = new Date(parts[0], parts[1]-1 + delta, 1);
+    return currentMonthKey(d);
+  }
+  function monthDiff(a, b){
+    var pa = a.split("-").map(Number), pb = b.split("-").map(Number);
+    return (pb[0]-pa[0])*12 + (pb[1]-pa[1]);
+  }
+  function daysInMonth(monthKey){
+    var parts = monthKey.split("-").map(Number);
+    var year = parts[0], month = parts[1];
+    var count = new Date(year, month, 0).getDate();
+    var out = [];
+    for (var i=1; i<=count; i++){
+      out.push(monthKey + "-" + String(i).padStart(2,"0"));
+    }
+    return out;
+  }
+
+  function fmtMoney(n){
+    var sign = n < 0 ? "-" : "";
+    return sign + "€" + Math.round(Math.abs(n)).toLocaleString();
+  }
+
+  function entriesForMonth(key){
+    return state.entries.filter(function(e){ return e.date && e.date.slice(0,7) === key; });
+  }
+  function isRecurringActive(tpl, monthKey){
+    if (monthDiff(tpl.startMonth, monthKey) < 0) return false;
+    if (tpl.stoppedAt && monthDiff(monthKey, tpl.stoppedAt) >= 0) return false;
+    if (typeof tpl.months === "number" && tpl.months !== null) {
+      if (monthDiff(tpl.startMonth, monthKey) >= tpl.months) return false;
+    }
+    return true;
+  }
+  function recurringForMonth(key){
+    return state.recurring.filter(function(t){ return isRecurringActive(t, key); });
+  }
+  function sumByType(list, type){
+    return list.filter(function(e){ return e.type === type; }).reduce(function(s,e){ return s + e.amount; }, 0);
+  }
+
+  function scheduledDatesForMonth(monthKey, person){
+    var days = person.workDays || [1,2,3,4,5];
+    return daysInMonth(monthKey).filter(function(d){
+      var parts = d.split("-").map(Number);
+      var wd = new Date(parts[0], parts[1]-1, parts[2]).getDay();
+      return days.indexOf(wd) !== -1;
+    });
+  }
+  function timeoffTypeFor(personId, date){
+    var hit = state.timeoff.filter(function(t){ return t.personId === personId && t.date === date; })[0];
+    return hit ? hit.type : null;
+  }
+  function unpaidHoursFor(personId, date){
+    var hit = state.hoursoff.filter(function(h){ return h.personId === personId && h.date === date && h.paid === false; })[0];
+    return hit ? hit.hours : 0;
+  }
+
+  function computePersonMonth(monthKey, person){
+    var scheduled = scheduledDatesForMonth(monthKey, person);
+    var today = todayISO();
+    var curKey = currentMonthKey();
+    var isFuture = monthKey > curKey;
+    var countedDates = isFuture ? [] : (monthKey < curKey ? scheduled : scheduled.filter(function(d){ return d <= today; }));
+    function tally(dates){
+      var sick = 0, adv = 0, vac = 0, unpaid = 0, special = 0, home = 0;
+      dates.forEach(function(d){
+        var t = timeoffTypeFor(person.id, d);
+        if (t === "sick") sick++;
+        else if (t === "adv") adv++;
+        else if (t === "vacation") vac++;
+        else if (t === "unpaid") unpaid++;
+        else if (t === "special") special++;
+        else if (t === "home") home++;
+      });
+      var worked = dates.length - sick - adv - vac - unpaid - special - home;
+      var sickFactor = (typeof person.sickPayPercent === "number" ? person.sickPayPercent : 100) / 100;
+      var fullPayDays = worked + adv + vac + home;
+      var hoursDeduction = 0;
+      dates.forEach(function(d){ hoursDeduction += unpaidHoursFor(person.id, d) * (person.hourlyWage||0); });
+      var wage = fullPayDays * (person.hoursPerDay||0) * (person.hourlyWage||0)
+        + sick * (person.hoursPerDay||0) * (person.hourlyWage||0) * sickFactor
+        - hoursDeduction;
+      return {
+        scheduledCount: dates.length,
+        sick: sick, adv: adv, vacation: vac, unpaid: unpaid, special: special, home: home, worked: worked,
+        wage: wage,
+        km: worked * (person.kmPerDay||0) * (person.kmRate||0),
+        food: (worked + home) * (person.foodStampPerDay||0),
+        specialPay: special * (person.specialLeavePerDay||0),
+        homeOfficePay: home * (person.homeOfficePerDay||0)
+      };
+    }
+    var live = tally(countedDates);
+    var full = tally(scheduled);
+    var internet = person.internetBenefit || 0;
+    return {
+      isFuture: isFuture,
+      isPartial: !isFuture && monthKey === curKey && countedDates.length < scheduled.length,
+      scheduledTotal: scheduled.length,
+      worked: live.worked, sick: live.sick, adv: live.adv, vacation: live.vacation, unpaid: live.unpaid, special: live.special, home: live.home,
+      wage: live.wage, km: live.km, food: live.food, internet: internet, specialPay: live.specialPay, homeOfficePay: live.homeOfficePay,
+      total: live.wage + live.km + live.food + internet + live.specialPay + live.homeOfficePay,
+      projectedTotal: full.wage + full.km + full.food + internet + full.specialPay + full.homeOfficePay
+    };
+  }
+
+  function peopleIncomeForMonth(monthKey){
+    return state.people.reduce(function(sum, p){ return sum + computePersonMonth(monthKey, p).total; }, 0);
+  }
+  function monthNet(monthKey){
+    var sporadic = entriesForMonth(monthKey);
+    var recurring = recurringForMonth(monthKey);
+    var income = sumByType(sporadic, "income") + sumByType(recurring, "income") + peopleIncomeForMonth(monthKey);
+    var expense = sumByType(sporadic, "expense") + sumByType(recurring, "expense");
+    return income - expense;
+  }
+
+  // ---- Rendering ----
+  function render(){
+    var key = state.month;
+    document.getElementById("monthLabel").textContent = monthLabel(key);
+
+    var sporadic = entriesForMonth(key);
+    var recurring = recurringForMonth(key);
+    var peopleIncome = peopleIncomeForMonth(key);
+    var income = sumByType(sporadic, "income") + sumByType(recurring, "income") + peopleIncome;
+    var expense = sumByType(sporadic, "expense") + sumByType(recurring, "expense");
+    var saved = income - expense;
+
+    document.getElementById("totalIncome").textContent = fmtMoney(income);
+    document.getElementById("totalExpense").textContent = fmtMoney(expense);
+    document.getElementById("totalSave").textContent = fmtMoney(saved);
+    document.getElementById("savePct").textContent = income > 0 ? (Math.round((saved/income)*100) + "% of income") : "0% of income";
+
+    renderPeopleSection();
+    renderRecurringSections(recurring);
+    renderSporadicSection(sporadic);
+    renderTrend();
+  }
+
+  function renderPeopleSection(){
+    var el = document.getElementById("peopleSection");
+    var html = '<div class="section-title">People\'s income<button type="button" class="add-link" id="addPersonLink">+ Add person</button></div>';
+    if (!state.people.length){
+      html += '<div class="hint-box">Add a person to track their paycheck automatically from their work pattern, wage and day-off calendar.</div>';
+    } else {
+      state.people.forEach(function(p){ html += personCard(p); });
+    }
+    el.innerHTML = html;
+    document.getElementById("addPersonLink").addEventListener("click", function(){ openPersonSheet(null); });
+    state.people.forEach(function(p){
+      var editBtn = document.getElementById("editPerson_" + p.id);
+      var delBtn = document.getElementById("delPerson_" + p.id);
+      var dayoffBtn = document.getElementById("dayoffBtn_" + p.id);
+      var hoursoffBtn = document.getElementById("hoursoffBtn_" + p.id);
+      if (editBtn) editBtn.addEventListener("click", function(){ openPersonSheet(p); });
+      if (delBtn) delBtn.addEventListener("click", function(){ if (confirm("Remove " + p.name + " and their day-off history?")) deletePerson(p.id); });
+      if (dayoffBtn) dayoffBtn.addEventListener("click", function(){ openDayoffSheet(p.id); });
+      if (hoursoffBtn) hoursoffBtn.addEventListener("click", function(){ openHoursoffSheet(p.id); });
+      state.timeoff.filter(function(t){ return t.personId === p.id && t.date.slice(0,7) === state.month; }).forEach(function(t){
+        var btn = document.getElementById("rmOff_" + t.id);
+        if (btn) btn.addEventListener("click", function(){ deleteTimeoff(t.id); });
+      });
+      state.hoursoff.filter(function(h){ return h.personId === p.id && h.date.slice(0,7) === state.month; }).forEach(function(h){
+        var btn = document.getElementById("rmHours_" + h.id);
+        if (btn) btn.addEventListener("click", function(){ deleteHoursoff(h.id); });
+      });
+    });
+  }
+
+  function personCard(person){
+    var c = computePersonMonth(state.month, person);
+    var subLine;
+    if (c.isFuture) subLine = "Projected for " + monthLabel(state.month);
+    else if (c.isPartial) subLine = "So far this month · projected " + fmtMoney(c.projectedTotal) + " in full";
+    else subLine = monthLabel(state.month) + ", in full";
+
+    var breakdown = '<div class="person-breakdown">';
+    breakdown += '<div>Net wage <span>' + fmtMoney(c.wage) + '</span></div>';
+    breakdown += '<div>Travel <span>' + fmtMoney(c.km) + '</span></div>';
+    breakdown += '<div>Food vouchers <span>' + fmtMoney(c.food) + '</span></div>';
+    breakdown += '<div>Internet <span>' + fmtMoney(c.internet) + '</span></div>';
+    if (c.specialPay) breakdown += '<div>Special leave <span>' + fmtMoney(c.specialPay) + '</span></div>';
+    if (c.homeOfficePay) breakdown += '<div>Home office <span>' + fmtMoney(c.homeOfficePay) + '</span></div>';
+    breakdown += '</div>';
+
+    var pattern = (person.workDays||[1,2,3,4,5]).slice().sort().map(function(d){ return WEEKDAY_NAMES[d]; }).join(", ");
+    var patternLine = '<div class="person-pattern">' + pattern + ' · ' + person.hoursPerDay + 'h/day · ' + c.worked + ' worked';
+    if (c.sick) patternLine += ', ' + c.sick + ' sick';
+    if (c.adv) patternLine += ', ' + c.adv + ' ADV';
+    if (c.vacation) patternLine += ', ' + c.vacation + ' vacation';
+    if (c.unpaid) patternLine += ', ' + c.unpaid + ' unpaid';
+    if (c.special) patternLine += ', ' + c.special + ' special leave';
+    if (c.home) patternLine += ', ' + c.home + ' home office';
+    patternLine += '</div>';
+
+    var chips = '<div class="dayoff-list">';
+    var monthOffs = state.timeoff.filter(function(t){ return t.personId === person.id && t.date.slice(0,7) === state.month; }).sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+    monthOffs.forEach(function(t){
+      var label = t.type.charAt(0).toUpperCase() + t.type.slice(1) + " " + (parseInt(t.date.slice(8,10),10));
+      chips += '<span class="dayoff-chip ' + t.type + '">' + label + '<button type="button" id="rmOff_' + t.id + '" aria-label="Remove">×</button></span>';
+    });
+    var monthHours = state.hoursoff.filter(function(h){ return h.personId === person.id && h.date.slice(0,7) === state.month; }).sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+    monthHours.forEach(function(h){
+      var cls = h.paid ? "adv" : "unpaid";
+      var label = h.hours + "h " + (h.paid ? "paid" : "unpaid") + " " + (parseInt(h.date.slice(8,10),10));
+      chips += '<span class="dayoff-chip ' + cls + '">' + label + '<button type="button" id="rmHours_' + h.id + '" aria-label="Remove">×</button></span>';
+    });
+    chips += '</div>';
+
+    return '<div class="person-card">' +
+      '<div class="person-head"><span class="person-name">' + person.name + '</span>' +
+      '<span class="person-actions"><button type="button" id="editPerson_' + person.id + '" aria-label="Edit">✎</button>' +
+      '<button type="button" class="danger" id="delPerson_' + person.id + '" aria-label="Delete">🗑</button></span></div>' +
+      '<div class="person-total">' + fmtMoney(c.total) + '<span class="unit">net</span></div>' +
+      '<div class="person-sub">' + subLine + '</div>' +
+      breakdown + patternLine + chips +
+      '<button type="button" class="mark-dayoff-btn" id="dayoffBtn_' + person.id + '">+ Mark a day off</button> ' +
+      '<button type="button" class="mark-dayoff-btn" id="hoursoffBtn_' + person.id + '">+ Mark hours off</button>' +
+      '</div>';
+  }
+
+  function recurringRow(tpl){
+    var catLabel = tpl.category + (tpl.note ? " · " + tpl.note : "");
+    var willStop = tpl.stoppedAt && monthDiff(state.month, tpl.stoppedAt) < 1;
+    return '<div class="entry ' + tpl.type + '">' +
+      '<span class="dot"></span>' +
+      '<div class="info"><div class="cat">' + catLabel + (willStop ? '<span class="badge">stopping</span>' : '') + '</div></div>' +
+      '<div class="amt">' + (tpl.type === "expense" ? "-" : "+") + fmtMoney(tpl.amount).replace("-","") + '</div>' +
+      '<div class="actions">' +
+      (tpl.months === null && !tpl.stoppedAt ? '<button type="button" class="stop" id="stopRec_' + tpl.id + '" aria-label="Stop">⏸</button>' : '') +
+      '<button type="button" id="delRec_' + tpl.id + '" aria-label="Remove">🗑</button>' +
+      '</div></div>';
+  }
+
+  function renderRecurringSections(recurringList){
+    var ongoing = recurringList.filter(function(t){ return typeof t.months !== "number" || t.months === null; });
+    var limited = recurringList.filter(function(t){ return typeof t.months === "number" && t.months !== null; });
+
+    var ongoingEl = document.getElementById("ongoingSection");
+    var oHtml = '<div class="section-title">Fixed every month</div>';
+    if (!ongoing.length) oHtml += '<div class="hint-box">Rent, electricity, internet, water — anything that repeats indefinitely goes here.</div>';
+    else ongoing.forEach(function(t){ oHtml += recurringRow(t); });
+    ongoingEl.innerHTML = oHtml;
+
+    var limitedEl = document.getElementById("limitedSection");
+    var lHtml = '<div class="section-title">For a set number of months</div>';
+    if (limited.length) { limited.forEach(function(t){ lHtml += recurringRow(t); }); limitedEl.innerHTML = lHtml; }
+    else limitedEl.innerHTML = "";
+
+    recurringList.forEach(function(t){
+      var stopBtn = document.getElementById("stopRec_" + t.id);
+      var delBtn = document.getElementById("delRec_" + t.id);
+      if (stopBtn) stopBtn.addEventListener("click", function(){ stopRecurring(t.id); });
+      if (delBtn) delBtn.addEventListener("click", function(){ if (confirm("Remove this recurring entry entirely?")) deleteRecurring(t.id); });
+    });
+  }
+
+  function renderSporadicSection(list){
+    var el = document.getElementById("sporadicSection");
+    var html = '<div class="section-title">One-off<button type="button" class="add-link" id="addSporadicLink">+ Add</button></div>';
+    if (!list.length){
+      html += '<div class="empty">No one-off entries this month.</div>';
+    } else {
+      var byDay = {};
+      list.slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; }).forEach(function(e){
+        if (!byDay[e.date]) byDay[e.date] = [];
+        byDay[e.date].push(e);
+      });
+      Object.keys(byDay).sort().reverse().forEach(function(date){
+        var d = new Date(date + "T00:00:00");
+        html += '<div class="day-group"><div class="day-label">' + d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) + '</div>';
+        byDay[date].forEach(function(e){
+          html += '<div class="entry ' + e.type + '"><span class="dot"></span>' +
+            '<div class="info"><div class="cat">' + e.category + '</div>' +
+            (e.note ? '<div class="note">' + e.note + '</div>' : '') + '</div>' +
+            '<div class="amt">' + (e.type === "expense" ? "-" : "+") + fmtMoney(e.amount).replace("-","") + '</div>' +
+            '<div class="actions"><button type="button" id="delEntry_' + e.id + '" aria-label="Delete">🗑</button></div></div>';
+        });
+        html += '</div>';
+      });
+    }
+    el.innerHTML = html;
+    document.getElementById("addSporadicLink").addEventListener("click", openSheet);
+    list.forEach(function(e){
+      var btn = document.getElementById("delEntry_" + e.id);
+      if (btn) btn.addEventListener("click", function(){ deleteEntry(e.id); });
+    });
+  }
+
+  function renderTrend(){
+    var months = [];
+    for (var i = 5; i >= 0; i--) months.push(shiftMonth(state.month, -i));
+    var values = months.map(monthNet);
+    var max = Math.max(1, Math.max.apply(null, values.map(Math.abs)));
+    var w = 600, h = 120, barW = w / months.length;
+    var incomeColor = getComputedStyle(document.documentElement).getPropertyValue("--income").trim() || "#2f6b4f";
+    var expenseColor = getComputedStyle(document.documentElement).getPropertyValue("--expense").trim() || "#9c4a3a";
+    var lineColor = getComputedStyle(document.documentElement).getPropertyValue("--line").trim() || "#e2ddd1";
+    var midY = h/2;
+    var svg = '<line x1="0" y1="' + midY + '" x2="' + w + '" y2="' + midY + '" stroke="' + lineColor + '" stroke-width="1"></line>';
+    values.forEach(function(v, idx){
+      var barH = (Math.abs(v) / max) * (h/2 - 8);
+      var x = idx * barW + barW*0.2;
+      var bw = barW*0.6;
+      var y = v >= 0 ? midY - barH : midY;
+      var color = v >= 0 ? incomeColor : expenseColor;
+      svg += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + Math.max(barH,1) + '" rx="3" fill="' + color + '"></rect>';
+    });
+    document.getElementById("trendChart").innerHTML = svg;
+  }
+
+  // ---- Backup / restore sheet ----
+  function openBackupSheet(){
+    document.getElementById("backupStatus").textContent = "";
+    document.getElementById("importFile").value = "";
+    document.getElementById("backupBackdrop").hidden = false;
+  }
+  function closeBackupSheet(){ document.getElementById("backupBackdrop").hidden = true; }
+  document.getElementById("openBackupBtn").addEventListener("click", openBackupSheet);
+  document.getElementById("backupCloseBtn").addEventListener("click", closeBackupSheet);
+  document.getElementById("backupBackdrop").addEventListener("click", function(e){ if (e.target === this) closeBackupSheet(); });
+
+  document.getElementById("exportBtn").addEventListener("click", function(){
+    var payload = {
+      entries: state.entries, recurring: state.recurring, people: state.people,
+      timeoff: state.timeoff, hoursoff: state.hoursoff,
+      exportedAt: new Date().toISOString()
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "our-ledger-backup-" + todayISO() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.getElementById("backupStatus").textContent = "Backup downloaded.";
+  });
+
+  document.getElementById("importFile").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try {
+        var data = JSON.parse(reader.result);
+        if (!data || typeof data !== "object") throw new Error("bad file");
+        state.entries = Array.isArray(data.entries) ? data.entries : [];
+        state.recurring = Array.isArray(data.recurring) ? data.recurring : [];
+        state.people = Array.isArray(data.people) ? data.people : [];
+        state.timeoff = Array.isArray(data.timeoff) ? data.timeoff : [];
+        state.hoursoff = Array.isArray(data.hoursoff) ? data.hoursoff : [];
+        persist();
+        render();
+        document.getElementById("backupStatus").textContent = "Restored. All data replaced from the backup file.";
+      } catch (err) {
+        document.getElementById("backupStatus").textContent = "Couldn't read that file — is it a backup downloaded from this app?";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // ---- Entry sheet ----
+  var currentType = "income";
+  var currentFreq = "once";
+
+  function populateCategories(){
+    var sel = document.getElementById("categoryInput");
+    sel.innerHTML = "";
+    var cats = currentType === "income" ? INCOME_CATS : EXPENSE_CATS;
+    cats.forEach(function(c){ var opt = document.createElement("option"); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
+  }
+  function defaultDateForViewedMonth(){
+    if (state.month === currentMonthKey()) return todayISO();
+    return state.month + "-01";
+  }
+  function setFreq(freq){
+    currentFreq = freq;
+    document.getElementById("freqOnceBtn").classList.toggle("active", freq === "once");
+    document.getElementById("freqRecurringBtn").classList.toggle("active", freq === "recurring");
+    document.getElementById("onceDateField").hidden = freq !== "once";
+    document.getElementById("recurringOptions").hidden = freq !== "recurring";
+  }
+  function openSheet(){
+    currentType = "income";
+    document.getElementById("typeIncomeBtn").classList.add("active");
+    document.getElementById("typeExpenseBtn").classList.remove("active");
+    populateCategories();
+    setFreq("once");
+    document.getElementById("amountInput").value = "";
+    document.getElementById("noteInput").value = "";
+    document.getElementById("dateInput").value = defaultDateForViewedMonth();
+    document.getElementById("startMonthInput").value = state.month;
+    document.getElementById("durationSelect").value = "ongoing";
+    document.getElementById("monthsCountField").hidden = true;
+    document.getElementById("monthsCountInput").value = "";
+    document.getElementById("formStatus").textContent = "";
+    document.getElementById("backdrop").hidden = false;
+  }
+  function closeSheet(){ document.getElementById("backdrop").hidden = true; }
+
+  document.getElementById("addBtn").addEventListener("click", openSheet);
+  document.getElementById("cancelBtn").addEventListener("click", closeSheet);
+  document.getElementById("backdrop").addEventListener("click", function(e){ if (e.target === this) closeSheet(); });
+  document.getElementById("typeIncomeBtn").addEventListener("click", function(){
+    currentType = "income"; this.classList.add("active");
+    document.getElementById("typeExpenseBtn").classList.remove("active"); populateCategories();
+  });
+  document.getElementById("typeExpenseBtn").addEventListener("click", function(){
+    currentType = "expense"; this.classList.add("active");
+    document.getElementById("typeIncomeBtn").classList.remove("active"); populateCategories();
+  });
+  document.getElementById("freqOnceBtn").addEventListener("click", function(){ setFreq("once"); });
+  document.getElementById("freqRecurringBtn").addEventListener("click", function(){ setFreq("recurring"); });
+  document.getElementById("durationSelect").addEventListener("change", function(){
+    document.getElementById("monthsCountField").hidden = this.value !== "limited";
+  });
+  document.getElementById("prevMonth").addEventListener("click", function(){ state.month = shiftMonth(state.month, -1); render(); });
+  document.getElementById("nextMonth").addEventListener("click", function(){ state.month = shiftMonth(state.month, 1); render(); });
+
+  document.getElementById("entryForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var amount = parseFloat(document.getElementById("amountInput").value);
+    if (!amount || amount <= 0) { document.getElementById("formStatus").textContent = "Enter an amount greater than zero."; return; }
+    var category = document.getElementById("categoryInput").value;
+    var note = document.getElementById("noteInput").value.trim();
+
+    if (currentFreq === "once") {
+      var date = document.getElementById("dateInput").value;
+      if (!date) { document.getElementById("formStatus").textContent = "Pick a date."; return; }
+      saveEntry({ type: currentType, amount: Math.round(amount*100)/100, category: category, note: note, date: date, createdAt: Date.now() });
+    } else {
+      var startMonth = document.getElementById("startMonthInput").value;
+      if (!startMonth) { document.getElementById("formStatus").textContent = "Pick a starting month."; return; }
+      var limited = document.getElementById("durationSelect").value === "limited";
+      var months = null;
+      if (limited) {
+        months = parseInt(document.getElementById("monthsCountInput").value, 10);
+        if (!months || months < 1) { document.getElementById("formStatus").textContent = "Enter how many months this should run for."; return; }
+      }
+      saveRecurring({ type: currentType, amount: Math.round(amount*100)/100, category: category, note: note, startMonth: startMonth, months: months, stoppedAt: null, createdAt: Date.now() });
+    }
+    closeSheet();
+  });
+
+  // ---- Person sheet ----
+  var editingPersonId = null;
+
+  function openPersonSheet(person){
+    editingPersonId = person ? person.id : null;
+    document.getElementById("personSheetTitle").textContent = person ? "Edit person" : "Add person";
+    document.getElementById("personNameInput").value = person ? person.name : "";
+    document.getElementById("personWageInput").value = person ? person.hourlyWage : "";
+    document.getElementById("personHoursInput").value = person ? person.hoursPerDay : 8;
+    document.getElementById("personKmInput").value = person ? person.kmPerDay : "";
+    document.getElementById("personKmRateInput").value = person ? person.kmRate : "";
+    document.getElementById("personFoodInput").value = person ? person.foodStampPerDay : "";
+    document.getElementById("personInternetInput").value = person ? person.internetBenefit : "";
+    document.getElementById("personSickPctInput").value = person && typeof person.sickPayPercent === "number" ? person.sickPayPercent : 100;
+    document.getElementById("personSpecialInput").value = person ? person.specialLeavePerDay : "";
+    document.getElementById("personHomeInput").value = person ? person.homeOfficePerDay : "";
+    var days = person && person.workDays ? person.workDays : [1,2,3,4,5];
+    document.querySelectorAll("#weekdayRow button").forEach(function(btn){
+      btn.classList.toggle("active", days.indexOf(parseInt(btn.dataset.day,10)) !== -1);
+    });
+    document.getElementById("personFormStatus").textContent = "";
+    document.getElementById("personBackdrop").hidden = false;
+  }
+  function closePersonSheet(){ document.getElementById("personBackdrop").hidden = true; }
+
+  document.getElementById("personCancelBtn").addEventListener("click", closePersonSheet);
+  document.getElementById("personBackdrop").addEventListener("click", function(e){ if (e.target === this) closePersonSheet(); });
+  document.querySelectorAll("#weekdayRow button").forEach(function(btn){
+    btn.addEventListener("click", function(){ this.classList.toggle("active"); });
+  });
+
+  document.getElementById("personForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var name = document.getElementById("personNameInput").value.trim();
+    var wage = parseFloat(document.getElementById("personWageInput").value);
+    var hours = parseFloat(document.getElementById("personHoursInput").value);
+    if (!name) { document.getElementById("personFormStatus").textContent = "Enter a name."; return; }
+    if (!wage || wage <= 0) { document.getElementById("personFormStatus").textContent = "Enter an hourly wage."; return; }
+    if (!hours || hours <= 0) { document.getElementById("personFormStatus").textContent = "Enter hours per work day."; return; }
+    var days = [];
+    document.querySelectorAll("#weekdayRow button.active").forEach(function(btn){ days.push(parseInt(btn.dataset.day,10)); });
+    if (!days.length) { document.getElementById("personFormStatus").textContent = "Pick at least one work day."; return; }
+
+    var data = {
+      name: name,
+      hourlyWage: wage,
+      hoursPerDay: hours,
+      workDays: days,
+      kmPerDay: parseFloat(document.getElementById("personKmInput").value) || 0,
+      kmRate: parseFloat(document.getElementById("personKmRateInput").value) || 0,
+      foodStampPerDay: parseFloat(document.getElementById("personFoodInput").value) || 0,
+      internetBenefit: parseFloat(document.getElementById("personInternetInput").value) || 0,
+      sickPayPercent: (function(){ var v = parseFloat(document.getElementById("personSickPctInput").value); return isNaN(v) ? 100 : Math.max(0, Math.min(100, v)); })(),
+      specialLeavePerDay: parseFloat(document.getElementById("personSpecialInput").value) || 0,
+      homeOfficePerDay: parseFloat(document.getElementById("personHomeInput").value) || 0
+    };
+
+    if (editingPersonId) updatePerson(editingPersonId, data);
+    else savePerson(data);
+    closePersonSheet();
+  });
+
+  // ---- Day-off sheet ----
+  var currentOffType = "sick";
+  var dayoffPersonId = null;
+  var OFF_BUTTON_IDS = ["offSickBtn","offAdvBtn","offVacationBtn","offUnpaidBtn","offSpecialBtn","offHomeBtn"];
+
+  function setOffType(type){
+    currentOffType = type;
+    OFF_BUTTON_IDS.forEach(function(id){
+      var btn = document.getElementById(id);
+      btn.classList.toggle("active", btn.dataset.off === type);
+    });
+  }
+
+  function openDayoffSheet(personId){
+    dayoffPersonId = personId;
+    setOffType("sick");
+    document.getElementById("dayoffDateInput").value = defaultDateForViewedMonth();
+    document.getElementById("dayoffRepeatInput").value = "";
+    document.getElementById("dayoffFormStatus").textContent = "";
+    document.getElementById("dayoffBackdrop").hidden = false;
+  }
+  function closeDayoffSheet(){ document.getElementById("dayoffBackdrop").hidden = true; }
+
+  document.getElementById("dayoffCancelBtn").addEventListener("click", closeDayoffSheet);
+  document.getElementById("dayoffBackdrop").addEventListener("click", function(e){ if (e.target === this) closeDayoffSheet(); });
+  OFF_BUTTON_IDS.forEach(function(id){
+    document.getElementById(id).addEventListener("click", function(){ setOffType(this.dataset.off); });
+  });
+
+  document.getElementById("dayoffForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    if (!dayoffPersonId) return;
+    var date = document.getElementById("dayoffDateInput").value;
+    if (!date) { document.getElementById("dayoffFormStatus").textContent = "Pick a date."; return; }
+    var repeatWeeks = parseInt(document.getElementById("dayoffRepeatInput").value, 10);
+    var count = (repeatWeeks && repeatWeeks > 1) ? Math.min(repeatWeeks, 52) : 1;
+    for (var i = 0; i < count; i++) {
+      saveTimeoff({ personId: dayoffPersonId, date: addDays(date, i*7), type: currentOffType, createdAt: Date.now() });
+    }
+    closeDayoffSheet();
+  });
+
+  // ---- Hours-off sheet ----
+  var hoursoffPersonId = null;
+  var hoursoffPaid = true;
+
+  function openHoursoffSheet(personId){
+    hoursoffPersonId = personId;
+    hoursoffPaid = true;
+    document.getElementById("hoursPaidBtn").classList.add("active");
+    document.getElementById("hoursUnpaidBtn").classList.remove("active");
+    document.getElementById("hoursoffDateInput").value = defaultDateForViewedMonth();
+    document.getElementById("hoursoffHoursInput").value = "";
+    document.getElementById("hoursoffFormStatus").textContent = "";
+    document.getElementById("hoursoffBackdrop").hidden = false;
+  }
+  function closeHoursoffSheet(){ document.getElementById("hoursoffBackdrop").hidden = true; }
+
+  document.getElementById("hoursoffCancelBtn").addEventListener("click", closeHoursoffSheet);
+  document.getElementById("hoursoffBackdrop").addEventListener("click", function(e){ if (e.target === this) closeHoursoffSheet(); });
+  document.getElementById("hoursPaidBtn").addEventListener("click", function(){
+    hoursoffPaid = true; this.classList.add("active"); document.getElementById("hoursUnpaidBtn").classList.remove("active");
+  });
+  document.getElementById("hoursUnpaidBtn").addEventListener("click", function(){
+    hoursoffPaid = false; this.classList.add("active"); document.getElementById("hoursPaidBtn").classList.remove("active");
+  });
+
+  document.getElementById("hoursoffForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    if (!hoursoffPersonId) return;
+    var date = document.getElementById("hoursoffDateInput").value;
+    var hours = parseFloat(document.getElementById("hoursoffHoursInput").value);
+    if (!date) { document.getElementById("hoursoffFormStatus").textContent = "Pick a date."; return; }
+    if (!hours || hours <= 0) { document.getElementById("hoursoffFormStatus").textContent = "Enter how many hours."; return; }
+    saveHoursoff({ personId: hoursoffPersonId, date: date, hours: Math.round(hours*4)/4, paid: hoursoffPaid, createdAt: Date.now() });
+    closeHoursoffSheet();
+  });
+
+  // ---- Persistence (localStorage only — nothing leaves this device) ----
+  function localId(prefix){ return (prefix||'e') + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  function saveEntry(entry){ entry.id = localId('e'); state.entries.push(entry); persist(); render(); }
+  function deleteEntry(id){ state.entries = state.entries.filter(function(e){ return e.id !== id; }); persist(); render(); }
+  function saveRecurring(tpl){ tpl.id = localId('r'); state.recurring.push(tpl); persist(); render(); }
+  function stopRecurring(id){
+    var tpl = state.recurring.filter(function(t){ return t.id === id; })[0];
+    if (!tpl) return;
+    tpl.stoppedAt = shiftMonth(state.month, 1); persist(); render();
+  }
+  function deleteRecurring(id){ state.recurring = state.recurring.filter(function(t){ return t.id !== id; }); persist(); render(); }
+
+  function savePerson(data){ data.id = localId('p'); data.createdAt = Date.now(); state.people.push(data); persist(); render(); }
+  function updatePerson(id, data){
+    var idx = state.people.findIndex(function(p){ return p.id === id; });
+    if (idx !== -1) state.people[idx] = Object.assign({}, state.people[idx], data);
+    persist(); render();
+  }
+  function deletePerson(id){
+    state.people = state.people.filter(function(p){ return p.id !== id; });
+    state.timeoff = state.timeoff.filter(function(t){ return t.personId !== id; });
+    state.hoursoff = state.hoursoff.filter(function(h){ return h.personId !== id; });
+    persist(); render();
+  }
+
+  function saveTimeoff(entry){ entry.id = localId('t'); state.timeoff.push(entry); persist(); render(); }
+  function deleteTimeoff(id){ state.timeoff = state.timeoff.filter(function(t){ return t.id !== id; }); persist(); render(); }
+  function saveHoursoff(entry){ entry.id = localId('h'); state.hoursoff.push(entry); persist(); render(); }
+  function deleteHoursoff(id){ state.hoursoff = state.hoursoff.filter(function(h){ return h.id !== id; }); persist(); render(); }
+
+  loadFromStorage();
+  state.month = currentMonthKey();
+  render();
+})();
+</script>
+</body>
+</html>
